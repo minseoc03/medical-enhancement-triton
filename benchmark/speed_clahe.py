@@ -17,13 +17,13 @@ def bench(H=2048, W=2048, it=100):
 
     # warm-up
     for _ in range(10):
-        _ = clahe_triton_atomic(x)
+        _ = clahe_triton(x)
     torch.cuda.synchronize()
 
     # Triton
     t0 = time.time()
     for _ in range(it):
-        y = clahe_triton_atomic(x)
+        y = clahe_triton(x)
     torch.cuda.synchronize()
     t1 = time.time()
     t_triton = (t1 - t0) * 1000 / it
