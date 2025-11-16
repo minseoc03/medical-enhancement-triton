@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from typing import Tuple, Literal, Optional, Union, Dict
+from kernels.clahe_triton import clahe_triton_atomic
 
 # Optinal torch import
 try:
@@ -137,6 +138,7 @@ def enhance_pipeline(
     denoise: Literal["none", "gaussian", "bilateral"] = "gaussian",
     denoise_params: Optional[Dict] = None,
     do_clahe: bool = True,
+    do_triton_clahe: bool = False,
     clahe_params: Optional[Dict] = None,
     do_unsharp: bool = True,
     unsharp_params: Optional[Dict] = None,
@@ -167,6 +169,8 @@ def enhance_pipeline(
     if do_clahe:
         clahe_params = clahe_params or {}
         x = clahe(x, **clahe_params)
+    if do_triton_clahe:
+        x = clahe_triton_atomic(x)
 
     # Unsharp (edge emphasis)
     if do_unsharp:

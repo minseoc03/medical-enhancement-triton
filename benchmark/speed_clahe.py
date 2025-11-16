@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
-from kernels.clahe_triton import clahe_triton
+from kernels.clahe_triton import clahe_triton, clahe_triton_atomic
 
 def cv2_clahe(x01_np):
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16,16))
@@ -15,14 +15,15 @@ def cv2_clahe(x01_np):
 def bench(H=2048, W=2048, it=100):
     x = torch.rand(1,1,H,W, device="cuda", dtype=torch.float32)
 
-    # warmup
-    y = clahe_triton(x)
+    # warm-up
+    for _ in range(10):
+        _ = clahe_triton_atomic(x)
     torch.cuda.synchronize()
 
     # Triton
     t0 = time.time()
     for _ in range(it):
-        y = clahe_triton(x)
+        y = clahe_triton_atomic(x)
     torch.cuda.synchronize()
     t1 = time.time()
     t_triton = (t1 - t0) * 1000 / it
@@ -35,7 +36,6 @@ def bench(H=2048, W=2048, it=100):
     t1 = time.time()
     t_cpu = (t1 - t0) * 1000 / it
 
-    # 품질 근사 체크 (참고용)
     s = ssim(x_np, y_np, data_range=1.0)
 
     print(f"Triton CLAHE: {t_triton:.3f} ms/it   |   OpenCV CPU: {t_cpu:.3f} ms/it   |   SSIM vs input: {s:.3f}")
