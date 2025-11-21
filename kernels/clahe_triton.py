@@ -7,6 +7,15 @@ import triton.language as tl
 DEFAULT_TILE = 16
 DEFAULT_BINS = 256
 
+@triton.autotune(
+    configs=[
+        triton.Config({}, num_warps=2, num_stages=2),
+        triton.Config({}, num_warps=4, num_stages=2),
+        triton.Config({}, num_warps=8, num_stages=2),
+        triton.Config({}, num_warps=4, num_stages=3),
+    ],
+    key=['H', 'W'],
+)
 @triton.jit
 def _clahe_kernel(
     in_ptr,          # float32[H, W]
