@@ -1,10 +1,22 @@
-# Medical Image Enhancement with Triton & DICOM Pipeline
+# Medical Image Enhancement with Triton
 
-A high-performance medical image enhancement pipeline built with
-**Triton GPU kernels**, **PyTorch**, and **DICOM preprocessing tools**.\
-This project aims to accelerate medical image enhancement workflows
-(CT/MRI) using custom GPU kernels and optimized data loading, targeting
-real-time performance.
+A high-performance medical image enhancement pipeline built with **Triton GPU kernels.**
+
+This repository implements a complete CT/MRI enhancement workflow, from DICOM preprocessing $\rightarrow$ Triton GPU kernels $\rightarrow$ postprocessing $\rightarrow$ benchmarking, targeting real-time performance on modern NVIDIA GPUs.
+
+## Tech Stack
+
+-   Python 3.12
+-   PyTorch 2.5+
+-   Triton
+-   pydicom
+-   NumPy / OpenCV
+
+## Environment
+- CPU : AMD Ryzen 9 9900x 12-core
+- GPU : NVIDIA GeForce RTX 5070 Ti 16GB VRAM
+- RAM : Crucial Pro DDR5-5600 CL46 128GB (64GB x 2)
+- Motherboard : MAG X870E TOMAHAWK WIFI
 
 ## Features
 
@@ -67,14 +79,6 @@ real-time performance.
 ### Run kernel
 
     python kernels/clahe.py --image path/to/image.png
-
-## Tech Stack
-
--   Python 3.12
--   PyTorch 2.5+
--   Triton
--   pydicom
--   NumPy / OpenCV
 
 ## Roadmap
 
