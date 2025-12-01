@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from typing import Tuple, Literal, Optional, Union, Dict
-from kernels.clahe_triton import clahe_triton_atomic
+from kernels.clahe_triton import clahe_triton
 
 # Optinal torch import
 try:
@@ -14,7 +14,7 @@ import cv2
 
 ArrayLike = Union[np.ndarray, "torch.Tensor"]
 # -----------------------------
-# Utilities
+# Utilities (CPU ver.)
 # -----------------------------
 def _ensure_numpy_01(x: ArrayLike) -> np.ndarray:
     """
@@ -23,9 +23,9 @@ def _ensure_numpy_01(x: ArrayLike) -> np.ndarray:
     """
     if _HAS_TORCH and isinstance(x, torch.Tensor):
         if x.ndim == 4:
-            x = x[0,0]
+            x = x[0,0] # take only 1 batch (one medical image per iteration)
         elif x.ndim == 3:
-            x = x[0]
+            x = x[0] # assume only 1 channel exists (applicable to X-Ray, CT, MRI)
         x = x.detach().cpu().numpy()
     x = np.asarray(x)
     if x.ndim != 2:
@@ -33,12 +33,13 @@ def _ensure_numpy_01(x: ArrayLike) -> np.ndarray:
     x = x.astype(np.float32)
 
     vmin, vmax = float(np.min(x)), float(np.max(x))
-    if vmax - vmin > 1.5:
+    if vmax - vmin > 1.0 + 1e-6:
         x = (x - vmin) / (vmax - vmin + 1e-8)
     x = np.clip(x, 0.0, 1.0)
     return x
 
 def _to_uint8(x01 : np.ndarray) -> np.ndarray:
+    # add 0.5 for rounding
     return np.clip(x01 * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
 def _from_uint8(u8 : np.ndarray) -> np.ndarray:
@@ -53,6 +54,27 @@ def intensity_clip(x01: ArrayLike, low_q: float = 0.0, high_q: float = 1.0) -> n
         raise ValueError("low_q/high_q must satisfy 0<=low<high<=1")
     lo, hi = np.quantile(x, [low_q, high_q])
     x = np.clip((x - lo) / (hi - lo + 1e-8), 0.0, 1.0)
+    return x
+
+# -----------------------------
+# Utilities (Triton ver.)
+# -----------------------------
+def _ensure_torch_01(x: ArrayLike) -> torch.Tensor:
+    if (isinstance(x, np.ndarray)):
+        x = torch.from_numpy(x).to("cuda")
+    if (isinstance(x, torch.Tensor)):
+        if x.ndim == 4:
+            x = x[0,0]
+        if x.ndim == 3:
+            x = x[0]
+    x = x.float()
+
+    vmin = x.min().item()
+    vmax = x.max().item()
+    if vmax - vmin > 1.0 + 1e-6:
+        x = (x - vmin) / (vmax - vmin + 1e-8)
+    
+    x = torch.clamp(x, 0.0, 1.0)
     return x
 
 # -----------------------------
@@ -130,7 +152,7 @@ def unsharp_mask(
 
 
 # -----------------------------
-# Composite pipeline
+# Composite pipeline (CPU ver.)
 # -----------------------------
 def enhance_pipeline(
     x01: ArrayLike,
@@ -138,7 +160,6 @@ def enhance_pipeline(
     denoise: Literal["none", "gaussian", "bilateral"] = "gaussian",
     denoise_params: Optional[Dict] = None,
     do_clahe: bool = True,
-    do_triton_clahe: bool = False,
     clahe_params: Optional[Dict] = None,
     do_unsharp: bool = True,
     unsharp_params: Optional[Dict] = None,
@@ -169,8 +190,6 @@ def enhance_pipeline(
     if do_clahe:
         clahe_params = clahe_params or {}
         x = clahe(x, **clahe_params)
-    if do_triton_clahe:
-        x = clahe_triton_atomic(x)
 
     # Unsharp (edge emphasis)
     if do_unsharp:
@@ -192,3 +211,25 @@ def enhance_pipeline(
         if not _HAS_TORCH:
             raise RuntimeError("torch is not available but return_numpy=False requested.")
         return torch.from_numpy(x).unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+
+# -----------------------------
+# Composite pipeline (Triton ver.)
+# -----------------------------
+def enhance_pipeline_triton(
+     x01: torch.Tensor,
+     *,
+     do_clahe: bool = True,
+     clahe_params: Optional[Dict] = None,
+):
+    x = _ensure_torch_01(x01)
+    x = x.unsqueeze(0).unsqueeze(0)
+    if not x01.is_cuda:
+        raise RuntimeError(f"Expected GPU tensor, got {x01.device}")
+    if do_clahe:
+        x = clahe_triton(x, **clahe_params)
+    if x.dim == 4:
+        x = x[0,0]
+    if x.dim == 3:
+        x = x[0]
+    x = x.detach().cpu().numpy()
+    return x
